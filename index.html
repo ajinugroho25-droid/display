@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Antrian Poli</title>
+<style>
+:root{--bg:#0E3B3A;--panel:#F4F8F6;--ink:#10302F;--mut:#5C7A77;--acc:#F2A900;--line:#D5E3DF}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column}
+header{display:flex;justify-content:space-between;align-items:baseline;padding:1.4vh 2.5vw;color:#fff}
+header h1{font-size:3.4vh;margin:0;font-weight:600}
+#info,#suara{font-size:2vh;color:#F2A900;margin-left:2vw}
+#jam{font-size:4vh;font-variant-numeric:tabular-nums}
+main{flex:1;min-height:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr));gap:1.2vw;padding:0 2.5vw 2.5vh}
+.poli{background:var(--panel);border-radius:1.2vh;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.poli.off{opacity:.5}
+.poli h2{margin:0;padding:1.6vh 1.5vw;font-size:3.2vh;border-bottom:2px solid var(--line);display:flex;justify-content:space-between;align-items:baseline}
+.poli h2 small{font-size:2vh;color:var(--mut);font-weight:400}
+ol{list-style:none;margin:0;padding:0;overflow:hidden;flex:1}
+li{padding:1.3vh 1.5vw;border-bottom:1px solid var(--line)}
+.rw{display:flex;gap:1.2vw;align-items:baseline;font-size:3vh}
+.rw b{min-width:5.5ch;color:var(--mut);font-weight:600;font-variant-numeric:tabular-nums}
+.lb{font-size:1.9vh;color:var(--mut);margin-bottom:.3vh}
+li.nx .rw{font-size:3.8vh;font-weight:700}
+li.hl{background:var(--acc);padding:2.2vh 1.5vw}
+li.hl .lb{color:var(--ink);font-weight:600}
+li.hl .rw{font-size:4.6vh;font-weight:700}
+li.hl .rw b{color:var(--ink)}
+li.hl.baru{animation:kedip .7s ease-in-out 6}
+@keyframes kedip{50%{background:#FFE08A}}
+.tunda{padding:1.2vh 1.5vw;border-top:2px solid var(--line);background:#EAF1EE}
+.tl{font-size:1.9vh;color:var(--mut);margin-bottom:.4vh}
+.tn{font-size:2.4vh;color:var(--mut)}
+.ket{padding:1.6vh 1.5vw;color:var(--mut);font-size:2.4vh}
+</style>
+</head>
+<body>
+<header><div style="display:flex;align-items:baseline"><h1>Antrian Pelayanan</h1><span id="info"></span><span id="suara"></span></div><div id="jam"></div></header>
+<main id="main"></main>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzOF_S7KBDIOVCJTh9zpANTv7ixv_7F8g8bR6sZEz0taMpScxaQXp_z3um2BTR2rscg/exec';
+const MAX = 7;          // jumlah nama per poli (di luar pasien yang dipanggil)
+const STALE = 90000;    // ms; poli dianggap terputus jika tak ada data baru (tanda hidup dikirim tiap 30 detik)
+const REFRESH = 1500;   // ms jeda antar pemeriksaan (naikkan bila muncul "Koneksi terputus" sering)
+
+// Nama disamarkan: kata pertama utuh, kata berikutnya jadi inisial
+const samar = n => { const p = n.trim().split(/\s+/); return p[0] + (p.length > 1 ? ' ' + p.slice(1).map(x => x[0] + '.').join(' ') : ''); };
+const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+
+// ---------- bunyi ting-tong ----------
+let ctx = null;
+try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+function cekSuara() {
+  const s = document.getElementById('suara');
+  s.textContent = ctx && ctx.state === 'running' ? '' : 'Tekan OK / klik layar sekali untuk mengaktifkan suara';
+}
+// Klik atau tombol apa pun di remote (misalnya OK) mengaktifkan suara
+['click', 'keydown'].forEach(ev => document.addEventListener(ev, () => { if (ctx) ctx.resume().then(cekSuara); }));
+function tingTong() {
+  if (!ctx || ctx.state !== 'running') return;
+  const t = ctx.currentTime;
+  [[880, 0], [660, 0.6]].forEach(([f, dt]) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t + dt);
+    g.gain.exponentialRampToValueAtTime(0.7, t + dt + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 1.3);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t + dt); o.stop(t + dt + 1.4);
+  });
+}
+
+// ---------- deteksi panggilan baru ----------
+const terlihat = {};
+let awal = true, baruPoli = new Set();
+function deteksi(d) {
+  baruPoli = new Set();
+  let bunyi = false;
+  Object.keys(d.panggil || {}).forEach(poli => {
+    const pg = d.panggil[poli], sig = pg.id + ':' + pg.seq;
+    if (!awal && terlihat[poli] !== sig) { baruPoli.add(poli); bunyi = true; }
+    terlihat[poli] = sig;
+  });
+  awal = false; // panggilan lama saat halaman dibuka tidak dibunyikan
+  if (bunyi) tingTong();
+}
+
+// ---------- tampilan ----------
+function baris(i, kelas, label) {
+  const li = el('li', kelas);
+  if (label) li.append(el('div', 'lb', label));
+  const rw = el('div', 'rw');
+  if (i.no && i.no !== '-') rw.append(el('b', null, i.no));
+  rw.append(el('span', null, samar(i.nama)));
+  li.append(rw);
+  return li;
+}
+
+function render(d) {
+  const m = document.getElementById('main');
+  m.textContent = ''; // kosongkan (kompatibel dengan browser TV lama)
+  if (!d.polis.length) { m.append(el('div', 'ket', 'Menunggu data antrian dari SIMPUS…')); return; }
+  d.polis.sort((a, b) => a.poli.localeCompare(b.poli)).forEach(p => {
+    const off = d.now - p.ts > STALE;
+    const belum = p.items.filter(i => i.status !== 'Sudah').sort((a, b) => (a.urut || 0) - (b.urut || 0)); // 'Sudah' = sudah dilayani
+    const aktif = belum.filter(i => !i.tunda), tunda = belum.filter(i => i.tunda);
+    const pg = (d.panggil || {})[p.poli];
+    const dipanggil = pg ? aktif.find(i => i.id === pg.id) : null;
+    const sisa = aktif.filter(i => i !== dipanggil);
+
+    const box = el('section', 'poli' + (off ? ' off' : ''));
+    const h = el('h2', null, p.poli);
+    h.append(el('small', null, off ? 'data terputus' : aktif.length + ' pasien'));
+    box.append(h);
+    if (!aktif.length && !tunda.length) { box.append(el('div', 'ket', 'Belum ada antrian')); m.append(box); return; }
+
+    const ol = el('ol');
+    if (dipanggil) ol.append(baris(dipanggil, 'hl' + (baruPoli.has(p.poli) ? ' baru' : ''), 'Sedang dipanggil'));
+    sisa.slice(0, MAX).forEach((i, k) => ol.append(!dipanggil && k === 0 ? baris(i, 'nx', 'Berikutnya') : baris(i)));
+    box.append(ol);
+    if (sisa.length > MAX) box.append(el('div', 'ket', '+ ' + (sisa.length - MAX) + ' lainnya'));
+    if (tunda.length) {
+      const t = el('div', 'tunda');
+      t.append(el('div', 'tl', 'Dilewati / menunggu hasil'));
+      tunda.slice(0, 4).forEach(i => t.append(el('div', 'tn', samar(i.nama))));
+      box.append(t);
+    }
+    m.append(box);
+  });
+}
+
+async function muat() {
+  try {
+    const d = await (await fetch(API, { cache: 'no-store' })).json();
+    deteksi(d);
+    render(d);
+    document.getElementById('info').textContent = '';
+  } catch (e) {
+    document.getElementById('info').textContent = 'Koneksi terputus, mencoba lagi…';
+  }
+  cekSuara();
+}
+
+const tick = () => document.getElementById('jam').textContent = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+tick(); setInterval(tick, 1000);
+// Putaran berurutan: pemeriksaan berikutnya baru dimulai setelah yang sebelumnya selesai, jadi tidak menumpuk
+async function putaran() { await muat(); setTimeout(putaran, REFRESH); }
+putaran();
+</script>
+</body>
+</html>
