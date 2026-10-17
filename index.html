@@ -40,7 +40,7 @@ li.hl.baru{animation:kedip .7s ease-in-out 6}
 <header><div style="display:flex;align-items:baseline"><h1>Antrian Pelayanan</h1><span id="info"></span><span id="suara"></span></div><div id="jam"></div></header>
 <main id="main"></main>
 <script>
-const API = 'https://script.google.com/macros/s/AKfycbzOF_S7KBDIOVCJTh9zpANTv7ixv_7F8g8bR6sZEz0taMpScxaQXp_z3um2BTR2rscg/exec';
+const API = 'https://script.google.com/macros/s/AKfycbxaRYzzkQgS3iki3iwJwrmu8KggELqojFLJowaXBKalcZp2VojgmYvJi_0vRZPL1sDD/exec';
 const MAX = 7;          // jumlah nama per poli (di luar pasien yang dipanggil)
 const STALE = 90000;    // ms; poli dianggap terputus jika tak ada data baru (tanda hidup dikirim tiap 30 detik)
 const REFRESH = 1500;   // ms jeda antar pemeriksaan (naikkan bila muncul "Koneksi terputus" sering)
@@ -124,7 +124,7 @@ function render(d) {
     if (tunda.length) {
       const t = el('div', 'tunda');
       t.append(el('div', 'tl', 'Dilewati / menunggu hasil'));
-      tunda.slice(0, 4).forEach(i => t.append(el('div', 'tn', samar(i.nama))));
+      tunda.slice(0, 4).forEach(i => t.append(el('div', 'tn', samar(i.nama) + (i.lab ? ' · lab' : ''))));
       box.append(t);
     }
     m.append(box);
