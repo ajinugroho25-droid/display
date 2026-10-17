@@ -23,8 +23,8 @@
   // Diisi sekali per komputer lewat menu Tampermonkey > "Pengaturan Display Antrian".
   // Disimpan di Tampermonkey, jadi tidak hilang saat skrip diperbarui.
   const DEFAULT = {
-    URL: '',            // alamat Apps Script berakhiran /exec
-    TOKEN: '',          // sama dengan TOKEN di Code.gs
+    URL: 'https://script.google.com/macros/s/AKfycbxaRYzzkQgS3iki3iwJwrmu8KggELqojFLJowaXBKalcZp2VojgmYvJi_0vRZPL1sDD/exec',            // alamat Apps Script berakhiran /exec
+    TOKEN: 'displayantrian',          // sama dengan TOKEN di Code.gs
     UNIT: [],           // unit poli yang dikirim dari komputer ini; kosong = semua unit yang tampil di login ini
     LAB: false,         // true hanya di komputer yang boleh membuka halaman laboratorium (login lab atau admin)
     HALAMAN: '/j-care/visits/index_unit',        // halaman antrian poli yang dibaca di latar belakang
